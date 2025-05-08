@@ -7,15 +7,15 @@ import ChangeHistoryTwoToneIcon from '@mui/icons-material/ChangeHistoryTwoTone';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import EditRoundedIcon from '@mui/icons-material/EditRounded';
 import FitScreenIcon from '@mui/icons-material/FitScreen';
-import FullscreenRoundedIcon from '@mui/icons-material/FullscreenRounded';
 import HtmlIcon from '@mui/icons-material/Html';
 import NumbersRoundedIcon from '@mui/icons-material/NumbersRounded';
 import SquareTwoToneIcon from '@mui/icons-material/SquareTwoTone';
 import WrapTextIcon from '@mui/icons-material/WrapText';
+import ZoomOutMapIcon from '@mui/icons-material/ZoomOutMap';
 
 import { copyToClipboard } from '~/common/util/clipboardUtils';
 import { useFullscreenElement } from '~/common/components/useFullscreenElement';
-import { useUIPreferencesStore } from '~/common/state/store-ui';
+import { useUIPreferencesStore } from '~/common/stores/store-ui';
 
 import { OVERLAY_BUTTON_RADIUS, OverlayButton, overlayButtonsActiveSx, overlayButtonsClassName, overlayButtonsTopRightSx, overlayGroupWithShadowSx, StyledOverlayButton } from '../OverlayButton';
 import { RenderCodeHtmlIFrame } from './code-renderers/RenderCodeHtmlIFrame';
@@ -172,15 +172,21 @@ function RenderCodeImpl(props: RenderCodeBaseProps & {
   const renderLineNumbers = !cannotRenderLineNumbers && ((showLineNumbers && uiComplexityMode !== 'minimal') || isFullscreen);
 
 
-  // Language & Highlight
-  const { highlightedCode, inferredCodeLanguage } = React.useMemo(() => {
-    const inferredCodeLanguage = inferCodeLanguage(blockTitle, code);
-    const highlightedCode =
-      !renderSyntaxHighlight ? null
-        : code ? highlightCode(inferredCodeLanguage, code, renderLineNumbers)
-          : null;
-    return { highlightedCode, inferredCodeLanguage };
-  }, [code, blockTitle, highlightCode, inferCodeLanguage, renderLineNumbers, renderSyntaxHighlight]);
+  // Language & Highlight (2-stages)
+  const inferredCodeLanguage = React.useMemo(() => {
+    // shortcut - this mimics a similar path in inferCodeLanguage
+    if (isHTMLCode)
+      return 'html';
+    // workhorse - could be slow, hence the memo
+    return inferCodeLanguage(blockTitle, code);
+  }, [blockTitle, code, inferCodeLanguage, isHTMLCode]);
+
+  const highlightedCode = React.useMemo(() => {
+    // fast-off
+    if (!renderSyntaxHighlight || !code)
+      return null;
+    return highlightCode(inferredCodeLanguage, code, renderLineNumbers);
+  }, [code, highlightCode, inferredCodeLanguage, renderLineNumbers, renderSyntaxHighlight]);
 
 
   // Title
@@ -249,10 +255,12 @@ function RenderCodeImpl(props: RenderCodeBaseProps & {
 
         {/* NOTE: this 'div' is only here to avoid some sort of collapse of the RenderCodeSyntax,
             which box disappears for some reason and the parent flex layout ends up lining up
-            chars in a non-proper way */}
-        <Box>
+            chars in a non-proper way.
+            Since this damages the 'fullscreen' operation, we restore it somehow.
+        */}
+        <Box sx={!isFullscreen ? undefined : { flex: 1, display: 'flex', flexDirection: 'column' }}>
           {/* Renders HTML, or inline SVG, inline plantUML rendered, or highlighted code */}
-          {renderHTML ? <RenderCodeHtmlIFrame htmlCode={code} />
+          {renderHTML ? <RenderCodeHtmlIFrame htmlCode={code} isFullscreen={isFullscreen} />
             : renderMermaid ? <RenderCodeMermaid mermaidCode={code} fitScreen={fitScreen} />
               : renderSVG ? <RenderCodeSVG svgCode={code} fitScreen={fitScreen} />
                 : (renderPlantUML && (plantUmlSvgData || plantUmlError)) ? <RenderCodePlantUML svgCode={plantUmlSvgData ?? null} error={plantUmlError} fitScreen={fitScreen} />
@@ -310,7 +318,7 @@ function RenderCodeImpl(props: RenderCodeBaseProps & {
 
               {/* Fullscreen */}
               <OverlayButton tooltip={noTooltips ? null : isFullscreen ? 'Exit Fullscreen' : !renderSyntaxHighlight ? 'Fullscreen' : 'Present'} variant={isFullscreen ? 'solid' : 'outlined'} onClick={isFullscreen ? exitFullscreen : enterFullscreen}>
-                <FullscreenRoundedIcon />
+                <ZoomOutMapIcon sx={{ fontSize: 'xl' }} />
               </OverlayButton>
 
               {/* Soft Wrap toggle */}

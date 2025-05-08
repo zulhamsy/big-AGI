@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { env } from '~/server/env.mjs';
+import { env } from '~/server/env';
 
 import packageJson from '../../../../../package.json';
 
@@ -11,7 +11,7 @@ import { GeminiWire_API_Models_List, GeminiWire_Safety } from '~/modules/aix/ser
 import { fixupHost } from '~/common/util/urlUtils';
 
 import { ListModelsResponse_schema } from '../llm.server.types';
-import { geminiFilterModels, geminiModelToModelDescription, geminiSortModels } from './gemini.models';
+import { geminiDevCheckForSuperfluousModels_DEV, geminiFilterModels, geminiModelsAddVariants, geminiModelToModelDescription, geminiSortModels } from './gemini.models';
 
 
 // Default hosts
@@ -98,19 +98,22 @@ export const llmGeminiRouter = createTRPCRouter({
       // get the models
       const wireModels = await geminiGET(input.access, null, GeminiWire_API_Models_List.getPath, false);
       const detailedModels = GeminiWire_API_Models_List.Response_schema.parse(wireModels).models;
+      geminiDevCheckForSuperfluousModels_DEV(detailedModels.map(model => model.name));
 
       // NOTE: no need to retrieve info for each of the models (e.g. /v1beta/model/gemini-pro).,
       //       as the List API already all the info on all the models
 
+      // first filter from the original list
+      const filteredModels = detailedModels.filter(geminiFilterModels);
+
       // map to our output schema
-      const models = detailedModels
-        .filter(geminiFilterModels)
-        .map(geminiModel => geminiModelToModelDescription(geminiModel))
+      const models = filteredModels
+        .map(geminiModelToModelDescription)
         .filter(model => !!model)
         .sort(geminiSortModels);
 
       return {
-        models: models,
+        models: geminiModelsAddVariants(models),
       };
     }),
 

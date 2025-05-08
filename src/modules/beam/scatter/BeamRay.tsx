@@ -71,6 +71,7 @@ function RayControls(props: {
   llmComponent: React.ReactNode,
   llmShowReasoning?: boolean,
   llmVendorIcon?: React.FunctionComponent<SvgIconProps>,
+  onIconClick: (event: React.MouseEvent) => void,
   onRemove: () => void,
   onToggleGenerate: () => void,
   rayLetter?: string,
@@ -89,7 +90,7 @@ function RayControls(props: {
 
     {/* Letter / LLM Icon (default) */}
     <TooltipOutlined asLargePane enableInteractive title={props.rayAvatarTooltip} placement='top-start'>
-      <Box sx={{ display: 'flex' }}>
+      <Box sx={{ display: 'flex' }} onClick={props.onIconClick}>
         {props.rayLetter ? (
           <Typography level='title-sm' color={SCATTER_COLOR !== 'neutral' ? SCATTER_COLOR : undefined}>
             {props.rayLetter}
@@ -174,9 +175,10 @@ export function BeamRay(props: {
 
   const llmId = ray?.rayLlmId ?? null;
   const setLlmId = React.useCallback((llmId: DLLMId | null) => raySetLlmId(props.rayId, llmId), [props.rayId, raySetLlmId]);
-  const [llmOrNull, llmComponent, llmVendorIcon] = useLLMSelect(
-    llmId, setLlmId, '', true, isScattering,
-  );
+  const [llmOrNull, llmComponent, llmVendorIcon] = useLLMSelect(llmId, setLlmId, {
+    label: '',
+    disabled: isScattering,
+  });
 
   // more derived
   const llmShowReasoning = !BEAM_SHOW_REASONING_ICON ? false : llmOrNull?.interfaces?.includes(LLM_IF_OAI_Reasoning) ?? false;
@@ -197,6 +199,12 @@ export function BeamRay(props: {
     const ray = rays.find(ray => ray.rayId === props.rayId);
     if (ray && ray.message.fragments.length && onSuccessCallback)
       onSuccessCallback(ray.message);
+  }, [props.beamStore, props.rayId]);
+
+  const handleDebugPrint = React.useCallback((event: React.MouseEvent) => {
+    if (!event.shiftKey) return;
+    const ray = props.beamStore.getState().rays.find(ray => ray.rayId === props.rayId);
+    console.log({ ray });
   }, [props.beamStore, props.rayId]);
 
   const handleRayRemove = React.useCallback(() => {
@@ -232,6 +240,7 @@ export function BeamRay(props: {
         llmComponent={llmComponent}
         llmShowReasoning={llmShowReasoning}
         llmVendorIcon={llmVendorIcon}
+        onIconClick={handleDebugPrint}
         onRemove={handleRayRemove}
         onToggleGenerate={handleRayToggleGenerate}
         rayLetter={showLettering ? 'R' + (1 + props.rayIndexWeak) : undefined}
